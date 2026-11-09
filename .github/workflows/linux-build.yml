@@ -137,7 +137,9 @@ jobs:
       # llvm-project subtree vendored inside rocmlirTriton (external/llvm-project);
       # repo + pinned commit come from cmake/deps.txt. Recipe matches
       # cmake/deps.cmake's from-source fallback: clang;mlir;lld, X86 only,
-      # RTTI on, zlib/zstd off, INSTALL_UTILS on.
+      # RTTI on, zlib/zstd off, INSTALL_UTILS on. The install holds only
+      # LLVM_DISTRIBUTION_COMPONENTS, which also scopes the exported CMake
+      # targets so find_package does not expect the omitted tools.
       # -----------------------------------------------------------------------
       - name: Resolve rocmlirTriton pin
         id: rocmlir
@@ -154,7 +156,7 @@ jobs:
           path: ${{ runner.workspace }}/llvm-install
           # Keyed only on the rocmlirTriton commit: a protobuf/ORT bump must not
           # evict the multi-hour LLVM cache.
-          key: linux-llvm-rocmlirtriton-${{ steps.rocmlir.outputs.commit }}
+          key: linux-llvm-dist-rocmlirtriton-${{ steps.rocmlir.outputs.commit }}
 
       - name: Build LLVM/MLIR/LLD from source
         if: steps.cache-llvm.outputs.cache-hit != 'true'
@@ -180,12 +182,16 @@ jobs:
             -DLLVM_INCLUDE_BENCHMARKS=OFF \
             -DLLVM_BUILD_TOOLS=ON \
             -DLLVM_INSTALL_UTILS=ON \
+            -DLLVM_TOOL_LTO_BUILD=OFF \
+            -DLLVM_TOOL_REMARKS_SHLIB_BUILD=OFF \
+            -DLLVM_DISTRIBUTION_COMPONENTS="clang;clang-resource-headers;llvm-link;llvm-config;llvm-tblgen;mlir-tblgen;mlir-pdll;mlir-linalg-ods-yaml-gen;mlir-opt;lld;FileCheck;not;count;split-file;llvm-headers;llvm-libraries;cmake-exports;mlir-headers;mlir-libraries;mlir-cmake-exports;lld-headers;lld-libraries;lld-cmake-exports" \
             -DCMAKE_CXX_VISIBILITY_PRESET=hidden \
             -DCMAKE_C_VISIBILITY_PRESET=hidden \
             -DCMAKE_VISIBILITY_INLINES_HIDDEN=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
-          cmake --build "${{ runner.workspace }}/build-llvm" --target install
+          cmake --build "${{ runner.workspace }}/build-llvm" --target install-distribution
+          du -sh "${{ runner.workspace }}"/llvm-install/{bin,include,lib}
           rm -rf "$SRC" "${{ runner.workspace }}/build-llvm"
 
       # -----------------------------------------------------------------------
